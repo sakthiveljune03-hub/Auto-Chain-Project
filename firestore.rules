@@ -1,0 +1,99 @@
+// firestore.rules
+// Deploy with: firebase deploy --only firestore:rules
+// Or paste into: Firebase Console → Firestore → Rules tab
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────────
+
+    // Check if the request is from a logged-in user
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Check if the requesting user owns this document
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // Validate a bid amount is higher than current
+    function isHigherBid(auctionId) {
+      let auction = get(/databases/$(database)/documents/auctions/$(auctionId)).data;
+      return request.resource.data.amount > auction.currentBid;
+    }
+
+    // Check auction is still live and not ended
+    function isAuctionLive(auctionId) {
+      let auction = get(/databases/$(database)/documents/auctions/$(auctionId)).data;
+      return auction.status == 'live' && auction.endTime > request.time;
+    }
+
+    // ── profiles ─────────────────────────────────────────────────────────────
+    match /profiles/{uid} {
+      // Anyone can read profiles (for showing bidder names, seller info)
+      allow read: if true;
+
+      // Only the owner can create/update their own profile
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) &&
+        // Prevent users from changing their own role to admin
+        (!request.resource.data.keys().hasAny(['role']) ||
+          request.resource.data.role == resource.data.role);
+    }
+
+    // ── cars ─────────────────────────────────────────────────────────────────
+    match /cars/{carId} {
+      // Anyone can read car listings
+      allow read: if true;
+
+      // Only authenticated users can create a car listing
+      allow create: if isAuth() &&
+        request.resource.data.sellerId == request.auth.uid;
+
+      // Only the seller can update their own listing
+      allow update: if isAuth() &&
+        resource.data.sellerId == request.auth.uid;
+
+      // No deletes (mark as cancelled instead)
+      allow delete: if false;
+    }
+
+    // ── auctions ─────────────────────────────────────────────────────────────
+    match /auctions/{auctionId} {
+      // Anyone can read auctions
+      allow read: if true;
+
+      // Only authenticated sellers can create auctions for their own cars
+      allow create: if isAuth() &&
+        request.resource.data.sellerId == request.auth.uid;
+
+      // Only the seller can update auction metadata (not bids — that's done server-side via transaction)
+      allow update: if isAuth() &&
+        resource.data.sellerId == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // ── bids ─────────────────────────────────────────────────────────────────
+    match /bids/{bidId} {
+      // Anyone can read bid history
+      allow read: if true;
+
+      // Authenticated users can place bids IF:
+      // - They are the bidder
+      // - The auction is live
+      // - Their bid is higher than current
+      // - They are not the seller
+      allow create: if isAuth() &&
+        request.resource.data.bidderId == request.auth.uid &&
+        isAuctionLive(request.resource.data.auctionId) &&
+        isHigherBid(request.resource.data.auctionId);
+
+      // Bids cannot be modified or deleted after placement
+      allow update, delete: if false;
+    }
+
+  }
+}

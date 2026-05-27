@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "autochain-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for AutoChain",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/edr-win32-arm64-msvc": "^0.3.3",
+    "hardhat": "^2.22.2"
+  }
+}

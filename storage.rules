@@ -1,0 +1,26 @@
+// storage.rules
+// Deploy with: firebase deploy --only storage
+// Or paste into: Firebase Console → Storage → Rules tab
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Car images: anyone can read, only auth users can upload
+    match /cars/{carId}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024   // Max 10 MB
+        && request.resource.contentType.matches('image/.*'); // Images only
+    }
+
+    // Avatar images: only the owner can upload their own avatar
+    match /avatars/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
